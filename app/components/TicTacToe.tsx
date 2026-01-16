@@ -36,73 +36,117 @@ export default function TicTacToe() {
     return null;
   }, []);
 
+  // Check if a player has won (returns true/false)
+  const hasWon = useCallback((player: Player, currentBoard: Board): boolean => {
+    return checkWin(player, currentBoard) !== null;
+  }, [checkWin]);
+
   // Check for draw
   const checkDraw = useCallback((currentBoard: Board): boolean => {
     return currentBoard.every(cell => cell !== null);
   }, []);
 
-  // Bot player logic - adapted from provided code
-  const botPlayer = useCallback((currentBoard: Board): number => {
-    // First, check if bot can win
-    for (const condition of WIN_CONDITIONS) {
-      let oCount = 0;
-      let emptyIndex = -1;
-
-      for (const idx of condition) {
-        if (currentBoard[idx] === 'O') {
-          oCount++;
-        } else if (currentBoard[idx] === null) {
-          emptyIndex = idx;
-        }
-      }
-
-      if (oCount === 2 && emptyIndex !== -1) {
-        return emptyIndex; // Win the game!
-      }
-    }
-
-    // Middle move priority
-    if (currentBoard[4] === null) {
-      return 4;
-    }
-
-    // Block player's winning move
-    const blockableMoves: number[] = [];
-    for (const condition of WIN_CONDITIONS) {
-      let xCount = 0;
-      let emptyIndex = -1;
-
-      for (const idx of condition) {
-        if (currentBoard[idx] === 'X') {
-          xCount++;
-        } else if (currentBoard[idx] === null) {
-          emptyIndex = idx;
-        }
-      }
-
-      if (xCount === 2 && emptyIndex !== -1) {
-        return emptyIndex; // Block winning move
-      }
-
-      if (xCount === 1 && emptyIndex !== -1) {
-        blockableMoves.push(emptyIndex);
-      }
-    }
-
-    // Return the first valid blockable move
-    if (blockableMoves.length > 0) {
-      return blockableMoves[0];
-    }
-
-    // Find any available move
+  // Get available moves
+  const getAvailableMoves = useCallback((currentBoard: Board): number[] => {
+    const moves: number[] = [];
     for (let i = 0; i < BOARD_SIZE; i++) {
       if (currentBoard[i] === null) {
-        return i;
+        moves.push(i);
+      }
+    }
+    return moves;
+  }, []);
+
+  // Minimax algorithm with alpha-beta pruning for UNBEATABLE AI
+  const minimax = useCallback((
+    currentBoard: Board,
+    depth: number,
+    isMaximizing: boolean,
+    alpha: number,
+    beta: number
+  ): number => {
+    // Terminal states
+    if (hasWon('O', currentBoard)) {
+      return 10 - depth; // Bot wins (prefer faster wins)
+    }
+    if (hasWon('X', currentBoard)) {
+      return depth - 10; // Player wins (prefer slower losses)
+    }
+    if (checkDraw(currentBoard)) {
+      return 0; // Draw
+    }
+
+    const availableMoves = getAvailableMoves(currentBoard);
+
+    if (isMaximizing) {
+      // Bot's turn (O) - maximize score
+      let maxEval = -Infinity;
+      for (const move of availableMoves) {
+        const newBoard = [...currentBoard];
+        newBoard[move] = 'O';
+        const evaluation = minimax(newBoard, depth + 1, false, alpha, beta);
+        maxEval = Math.max(maxEval, evaluation);
+        alpha = Math.max(alpha, evaluation);
+        if (beta <= alpha) {
+          break; // Alpha-beta pruning
+        }
+      }
+      return maxEval;
+    } else {
+      // Player's turn (X) - minimize score
+      let minEval = Infinity;
+      for (const move of availableMoves) {
+        const newBoard = [...currentBoard];
+        newBoard[move] = 'X';
+        const evaluation = minimax(newBoard, depth + 1, true, alpha, beta);
+        minEval = Math.min(minEval, evaluation);
+        beta = Math.min(beta, evaluation);
+        if (beta <= alpha) {
+          break; // Alpha-beta pruning
+        }
+      }
+      return minEval;
+    }
+  }, [hasWon, checkDraw, getAvailableMoves]);
+
+  // Bot player using minimax - HARD MODE (UNBEATABLE)
+  const botPlayer = useCallback((currentBoard: Board): number => {
+    const availableMoves = getAvailableMoves(currentBoard);
+    
+    if (availableMoves.length === 0) {
+      return -1;
+    }
+
+    // If board is empty, pick a strategic position (corner or center)
+    if (availableMoves.length === 9) {
+      // Corners are optimal opening moves, but center also works
+      const corners = [0, 2, 6, 8];
+      return corners[Math.floor(Math.random() * corners.length)];
+    }
+
+    // If only one move left, take it
+    if (availableMoves.length === 1) {
+      return availableMoves[0];
+    }
+
+    let bestMove = availableMoves[0];
+    let bestScore = -Infinity;
+
+    for (const move of availableMoves) {
+      const newBoard = [...currentBoard];
+      newBoard[move] = 'O';
+      
+      // Evaluate this move using minimax
+      const score = minimax(newBoard, 0, false, -Infinity, Infinity);
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = move;
       }
     }
 
-    return -1;
-  }, []);
+    return bestMove;
+  }, [getAvailableMoves, minimax]);
 
   // Handle bot's turn
   useEffect(() => {
@@ -181,6 +225,10 @@ export default function TicTacToe() {
     <div className="game-container">
       <h1 className="game-title">Tic-Tac-Toe</h1>
       
+      <div className="difficulty-badge">
+        <span>🔥 HARD MODE</span>
+      </div>
+      
       <div className="scoreboard">
         <div className="score-item player">
           <span className="score-label">You (X)</span>
@@ -224,7 +272,7 @@ export default function TicTacToe() {
       )}
 
       <div className="instructions">
-        <p>Click any empty cell to place your X</p>
+        <p>⚠️ Unbeatable AI - Can you get a draw?</p>
       </div>
     </div>
   );
